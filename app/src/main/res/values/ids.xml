@@ -1,0 +1,22 @@
+<resources>
+    <item name="diagnostic_status" type="id" />
+    <item name="diagnostic_detail" type="id" />
+    <item name="test_action" type="id" />
+    <item name="test_secondary_action" type="id" />
+    <item name="test_confirm" type="id" />
+    <item name="test_not_felt" type="id" />
+    <item name="touch_surface" type="id" />
+    <item name="display_surface" type="id" />
+    <item name="nav_protection" type="id" />
+    <item name="nav_hardware" type="id" />
+    <item name="protection_summary" type="id" />
+    <item name="protection_apply" type="id" />
+    <item name="protection_maintenance" type="id" />
+    <item name="protection_refresh" type="id" />
+    <item name="protection_pin" type="id" />
+    <item name="protection_toggle" type="id" />
+    <item name="pin_entry" type="id" />
+    <item name="pin_confirmation" type="id" />
+    <item name="pin_message" type="id" />
+    <item name="pin_show" type="id" />
+</resources>

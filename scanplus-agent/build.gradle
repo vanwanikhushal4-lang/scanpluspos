@@ -1,0 +1,27 @@
+apply plugin: 'com.android.application'
+android {
+    namespace 'com.example.hardware'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'dev.velox.hardwaresecurity'
+        minSdk 25
+        targetSdk 25
+        versionCode 9
+        versionName '3.1.2-scanplus'
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
+    signingConfigs {
+        owner {
+            def props = new Properties()
+            def source = rootProject.file('signing.properties')
+            if (source.exists()) {
+                source.withInputStream { props.load(it) }
+                storeFile file(props['storeFile']); storePassword props['storePassword']
+                keyAlias props['keyAlias']; keyPassword props['keyPassword']
+            }
+        }
+    }
+    buildTypes { release { debuggable false; minifyEnabled false; signingConfig signingConfigs.owner } }
+    applicationVariants.all { variant -> variant.outputs.all { outputFileName='SCANPLUS-UNIFIED-POS-SECURITY.apk' } }
+    lint { abortOnError true; disable 'ExpiredTargetSdkVersion' }
+}

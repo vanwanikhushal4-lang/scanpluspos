@@ -1,0 +1,25 @@
+apply plugin: 'com.android.application'
+android {
+    namespace 'dev.scanplus.appcontroltest'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'dev.scanplus.appcontroltest'
+        minSdk 25
+        targetSdk 25
+        versionCode = (project.findProperty('fixtureVersion') ?: '1').toInteger()
+        versionName = '1.0.' + (project.findProperty('fixtureVersion') ?: '1')
+    }
+    signingConfigs {
+        owner {
+            def props = new Properties()
+            def source = rootProject.file('signing.properties')
+            if (source.exists()) {
+                source.withInputStream { props.load(it) }
+                storeFile file(props['storeFile']); storePassword props['storePassword']
+                keyAlias props['keyAlias']; keyPassword props['keyPassword']
+            }
+        }
+    }
+    buildTypes { release { signingConfig signingConfigs.owner } }
+    lint { disable 'ExpiredTargetSdkVersion' }
+}

@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+    <uses-feature android:name="android.hardware.telephony" android:required="false" />
+    <application android:allowBackup="false" android:icon="@drawable/customizationicon"
+        android:label="@string/app_name" android:theme="@style/AppTheme" android:supportsRtl="true">
+        <activity android:name=".Splash" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <activity android:name=".MainActivity" android:label="@string/app_name" android:exported="false" />
+        <receiver android:name=".SecurityAdminReceiver" android:label="@string/app_name"
+            android:permission="android.permission.BIND_DEVICE_ADMIN" android:exported="true">
+            <meta-data android:name="android.app.device_admin" android:resource="@xml/security_admin" />
+            <intent-filter><action android:name="android.app.action.DEVICE_ADMIN_ENABLED" /></intent-filter>
+        </receiver>
+        <receiver android:name=".ProtectionBootReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+        <service android:name=".ProtectionService" android:exported="false" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Locally managed payment-terminal protection status" />
+        </service>
+        <activity android:name=".Accelarometer" android:label="Accelerometer" android:exported="false" />
+        <activity android:name=".Magneticsensor" android:label="Magnetic sensor" android:exported="false" />
+        <activity android:name=".Gyroscope" android:label="Gyroscope" android:exported="false" />
+        <activity android:name=".Batteryindicator" android:label="Battery" android:exported="false" />
+        <activity android:name=".Gpsloc" android:label="GPS location" android:exported="false" />
+        <activity android:name=".Wifiaddress" android:label="Wi-Fi" android:exported="false" />
+        <activity android:name=".Blueadd" android:label="Bluetooth" android:exported="false" />
+        <activity android:name=".Headphone" android:label="Headphones" android:exported="false" />
+        <activity android:name=".Vibration" android:label="Vibration" android:exported="false" />
+        <activity android:name=".Tele" android:label="SIM card" android:exported="false" />
+        <activity android:name=".Systeminfo" android:label="System information" android:exported="false" />
+        <activity android:name=".TouchSensor" android:label="Touchscreen" android:exported="false" />
+        <activity android:name=".Display" android:label="Display" android:exported="false" />
+        <activity android:name=".ProximitySensor" android:label="Proximity sensor" android:exported="false" />
+        <activity android:name=".Lightsensor" android:label="Light sensor" android:exported="false" />
+        <activity android:name=".Buttontesting" android:label="Buttons" android:exported="false" />
+        <activity android:name=".Mictesting" android:label="Speaker" android:exported="false" />
+        <activity android:name=".Pressure" android:label="Pressure sensor" android:exported="false" />
+        <activity android:name=".Flash" android:label="Flashlight" android:exported="false" />
+        <activity android:name=".Gravitysensor" android:label="Gravity sensor" android:exported="false" />
+    </application>
+</manifest>
