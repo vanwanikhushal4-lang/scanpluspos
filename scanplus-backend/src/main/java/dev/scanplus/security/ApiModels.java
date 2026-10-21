@@ -22,5 +22,5 @@ public final class ApiModels {
     public record CheckIn(@NotBlank @Size(max=40) String version, @NotNull @jakarta.validation.Valid Status status) {}
     public record Ack(@NotNull Boolean success, @NotNull @jakarta.validation.Valid Status status) {}
     public record Command(UUID id, boolean enabled, Instant expiresAt) {}
-    public record CheckInReply(Instant serverTime, Command command, int pollSeconds, AppModels.Command appCommand) {}
+    public record CheckInReply(Instant serverTime, Command command, int pollSeconds, AppModels.Command appCommand, WifiModels.Command wifiCommand, boolean openWifiGuardSupported, boolean simChangeAlertsSupported) {}
 }

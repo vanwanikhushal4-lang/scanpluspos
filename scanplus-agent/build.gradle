@@ -6,8 +6,8 @@ android {
         applicationId 'dev.velox.hardwaresecurity'
         minSdk 25
         targetSdk 25
-        versionCode 9
-        versionName '3.1.2-scanplus'
+        versionCode 13
+        versionName '3.5.0-scanplus'
     }
     compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
     signingConfigs {
@@ -25,3 +25,4 @@ android {
     applicationVariants.all { variant -> variant.outputs.all { outputFileName='SCANPLUS-UNIFIED-POS-SECURITY.apk' } }
     lint { abortOnError true; disable 'ExpiredTargetSdkVersion' }
 }
+dependencies { testImplementation 'junit:junit:4.13.2' }

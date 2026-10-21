@@ -15,7 +15,8 @@ public class SecurityStore {
     private final JdbcTemplate db;
     private final Clock clock;
     private final AppControlStore apps;
-    public SecurityStore(JdbcTemplate db,Clock clock,AppControlStore apps){this.db=db;this.clock=clock;this.apps=apps;}
+    private final WifiStore wifi;
+    public SecurityStore(JdbcTemplate db,Clock clock,AppControlStore apps,WifiStore wifi){this.db=db;this.clock=clock;this.apps=apps;this.wifi=wifi;}
     private Timestamp now(){return Timestamp.from(clock.instant());}
     private void audit(String actor,String action,UUID device,UUID command,String detail){
         db.update("INSERT INTO audit(event_time,actor,action,device_id,command_id,detail) VALUES(?,?,?,?,?,?)",now(),actor,action,device==null?null:device.toString(),command==null?null:command.toString(),detail);
@@ -46,7 +47,7 @@ public class SecurityStore {
         return new Identity(id,token);
     }
     public List<Map<String,Object>> devices(){
-        return db.queryForList("SELECT id,label,serial,model,version,enrolled_at,last_seen,enabled,owner_active,usb_sealed,bridge_available,detail,revoked FROM devices ORDER BY enrolled_at");
+        return db.queryForList("SELECT d.id,d.label,d.serial,d.model,d.version,d.enrolled_at,d.last_seen,d.enabled,d.owner_active,d.usb_sealed,d.bridge_available,d.detail,d.revoked,(SELECT COUNT(*) FROM sim_alerts s WHERE s.device_id=d.id AND s.acknowledged_at IS NULL) AS sim_alert_count FROM devices d ORDER BY d.enrolled_at");
     }
     private Map<String,Object> viewCommand(UUID id){
         return db.queryForMap("SELECT id,device_id,request_id,enabled,created_at,expires_at,state,detail FROM commands WHERE id=?",id.toString());
@@ -78,7 +79,7 @@ public class SecurityStore {
         var pending=db.queryForList("SELECT id,enabled,expires_at FROM commands WHERE device_id=? AND state='PENDING' ORDER BY created_at LIMIT 1",device.toString());
         Command command=null;
         if(!pending.isEmpty()) {var row=pending.get(0);command=new Command(UUID.fromString((String)row.get("ID")),(Boolean)row.get("ENABLED"),((Timestamp)row.get("EXPIRES_AT")).toInstant());}
-        return new CheckInReply(clock.instant(),command,10,command==null?apps.next(device):null);
+        return new CheckInReply(clock.instant(),command,10,command==null?apps.next(device):null,command==null?wifi.next(device):null,true,true);
     }
     @Transactional public Map<String,Object> acknowledge(UUID device,UUID command,Ack ack){
         requireDevice(device);
@@ -99,6 +100,6 @@ public class SecurityStore {
         return viewCommand(command);
     }
     @Transactional public List<Map<String,Object>> commands(UUID device){requireDevice(device);db.update("UPDATE commands SET state='EXPIRED',detail='Command expired before acknowledgement' WHERE device_id=? AND state='PENDING' AND expires_at<=?",device.toString(),now());return db.queryForList("SELECT id,request_id,enabled,created_at,expires_at,state,detail FROM commands WHERE device_id=? ORDER BY created_at DESC LIMIT 100",device.toString());}
-    @Transactional public void revoke(UUID device){requireDevice(device);db.update("UPDATE devices SET revoked=TRUE WHERE id=?",device.toString());db.update("UPDATE commands SET state='CANCELLED',detail='Device revoked' WHERE device_id=? AND state='PENDING'",device.toString());apps.revoke(device);audit("administrator","DEVICE_REVOKED",device,null,"Remote authentication revoked; local protection state unchanged");}
+    @Transactional public void revoke(UUID device){requireDevice(device);db.update("UPDATE devices SET revoked=TRUE WHERE id=?",device.toString());db.update("UPDATE commands SET state='CANCELLED',detail='Device revoked' WHERE device_id=? AND state='PENDING'",device.toString());apps.revoke(device);wifi.revoke(device);audit("administrator","DEVICE_REVOKED",device,null,"Remote authentication revoked; local protection state unchanged");}
     public List<Map<String,Object>> audit(){return db.queryForList("SELECT * FROM audit ORDER BY id DESC LIMIT 200");}
 }

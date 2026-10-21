@@ -11,9 +11,17 @@ import java.util.concurrent.*;
 public final class AgentService extends Service {
     private final ScheduledExecutorService worker=Executors.newSingleThreadScheduledExecutor();
     private final ExecutorService appWorker=Executors.newSingleThreadExecutor();
+    private final ExecutorService wifiWorker=Executors.newSingleThreadExecutor();
+    private final ExecutorService simWorker=Executors.newSingleThreadExecutor();
     private final java.util.concurrent.atomic.AtomicBoolean appBusy=new java.util.concurrent.atomic.AtomicBoolean();
+    private final java.util.concurrent.atomic.AtomicBoolean wifiBusy=new java.util.concurrent.atomic.AtomicBoolean();
+    private final java.util.concurrent.atomic.AtomicBoolean simBusy=new java.util.concurrent.atomic.AtomicBoolean();
     private long lastInventory;
-    private static final String VERSION="3.1.2-scanplus";
+    private volatile long lastWifiAttempt=-120000;
+    private static final String VERSION="3.5.0-scanplus";
+    private WifiPolicyMonitor wifiMonitor;
+    private SimMonitor simMonitor;
+    private volatile long lastSimAttempt=-120000;
     private int failures;
     private AgentProtection protection;
     private String message="Connecting to administrator backend";
@@ -25,9 +33,10 @@ public final class AgentService extends Service {
         Notification.Builder builder=Build.VERSION.SDK_INT>=26?new Notification.Builder(this,"scanplus-managed"):new Notification.Builder(this);
         startForeground(41,builder.setSmallIcon(android.R.drawable.ic_lock_lock).setContentTitle("SCANPLUS UNIFIED POS SECURITY").setContentText(message).setContentIntent(details).setOngoing(true).build());
     }
-    @Override public void onCreate(){super.onCreate();protection=new AgentProtection(this);notification();worker.execute(this::cycle);}
+    @Override public void onCreate(){super.onCreate();protection=new AgentProtection(this);notification();wifiMonitor=new WifiPolicyMonitor(this);try{wifiMonitor.start();}catch(RuntimeException error){Log.w("SCANPLUS","Wi-Fi monitor could not start");}try{simMonitor=new SimMonitor(this);simMonitor.start();}catch(RuntimeException error){Log.w("SCANPLUS","SIM monitor could not start");}worker.execute(this::cycle);}
     private void cycle(){
         int delay=10;
+        try{new WifiGuard(this).maintain();}catch(Exception error){Log.w("SCANPLUS","Wi-Fi policy needs attention: "+error.getClass().getSimpleName());}
         try{
             AgentConfiguration config=new AgentConfiguration(this);BackendClient backend=new BackendClient(config);
             if(!config.enrolled()){
@@ -36,10 +45,14 @@ public final class AgentService extends Service {
             }
             protection.maintain();
             JSONObject reply=backend.post("/api/device/check-in",new JSONObject().put("version",VERSION).put("status",protection.status()),true);
+            delay=Math.max(10,Math.min(60,reply.optInt("pollSeconds",10)));
             JSONObject command=reply.optJSONObject("command");
             if(command!=null)execute(config,backend,reply,command);
             JSONObject appCommand=reply.optJSONObject("appCommand");
             if(appCommand!=null)executeApp(appCommand);
+            JSONObject wifiCommand=reply.optJSONObject("wifiCommand");
+            if(wifiCommand!=null||android.os.SystemClock.elapsedRealtime()-lastWifiAttempt>60000)executeWifi(wifiCommand,reply.getString("serverTime"),reply.optBoolean("openWifiGuardSupported",false));
+            if(reply.optBoolean("simChangeAlertsSupported",false)&&simMonitor!=null&&(simMonitor.queued()>0||android.os.SystemClock.elapsedRealtime()-lastSimAttempt>60000))executeSim();
             if(!appBusy.get()&&android.os.SystemClock.elapsedRealtime()-lastInventory>60000){new AppControl(this).report(backend);lastInventory=android.os.SystemClock.elapsedRealtime();}
             failures=0;message=protection.status().getString("detail");
         }catch(Exception error){
@@ -49,6 +62,59 @@ public final class AgentService extends Service {
         }
         notification();
         if(!worker.isShutdown())worker.schedule(this::cycle,delay,TimeUnit.SECONDS);
+    }
+    private void executeSim(){
+        if(!simBusy.compareAndSet(false,true))return;
+        simWorker.execute(()->{
+            lastSimAttempt=android.os.SystemClock.elapsedRealtime();
+            try{
+                BackendClient backend=new BackendClient(new AgentConfiguration(this));JSONObject report=simMonitor.report();
+                simMonitor.acknowledge(report,backend.post("/api/device/sim/report",report,true));
+            }catch(Exception error){Log.w("SCANPLUS","SIM alert delivery failed: "+error.getClass().getSimpleName());}
+            finally{simBusy.set(false);}
+        });
+    }
+    private void executeWifi(JSONObject command,String serverTime,boolean guardProtocol){
+        if(!wifiBusy.compareAndSet(false,true))return;
+        wifiWorker.execute(()->{
+            lastWifiAttempt=android.os.SystemClock.elapsedRealtime();
+            try{
+                BackendClient backend=new BackendClient(new AgentConfiguration(this));
+                if(command==null){
+                    JSONObject report=new WifiScanner(this).scan();if(!guardProtocol)report.remove("openGuard");
+                    backend.post("/api/device/wifi/report",report,true);
+                }else{
+                    String id=command.getString("id");java.util.UUID.fromString(id);
+                    java.text.SimpleDateFormat format=new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss",java.util.Locale.US);
+                    format.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+                    if(format.parse(command.getString("expiresAt").substring(0,19)).getTime()<=format.parse(serverTime.substring(0,19)).getTime())return;
+                    SharedPreferences saved=getSharedPreferences("scanplus_wifi_results",MODE_PRIVATE);
+                    String prior=saved.getString(id,null);JSONObject ack;
+                    if(prior!=null)ack=new JSONObject(prior);
+                    else{
+                        WifiScanner scanner=new WifiScanner(this);JSONObject snapshot;boolean success;
+                        if(command.getString("action").equals("SET_OPEN_POLICY")||command.getString("action").equals("SET_OPEN_GUARD")){
+                            String error=null;
+                            boolean guard=command.getString("action").equals("SET_OPEN_GUARD");
+                            try{if(guard){if(!guardProtocol)throw new SecurityException("Update the backend before using the selective Wi-Fi guard");new WifiGuard(this).setOpenGuard(command.getBoolean("blocked"));}else new WifiGuard(this).setBlocked(command.getBoolean("blocked"));}catch(Exception failure){error=failure.getMessage()==null?failure.getClass().getSimpleName():failure.getMessage();}
+                            snapshot=scanner.cached();success=error==null;
+                            JSONObject observed=snapshot.getJSONObject(guard?"openGuard":"policy");
+                            if(success&&!observed.optBoolean("applied",false))success=false;
+                            snapshot.put("detail",error==null?observed.getString("detail"):error.substring(0,Math.min(error.length(),500)));
+                        }else if(command.getString("action").equals("SCAN")){
+                            snapshot=scanner.scan();success=snapshot.getString("scanState").equals("FRESH");
+                        }else throw new SecurityException("Unsupported Wi-Fi operation");
+                        ack=new JSONObject().put("success",success).put("snapshot",snapshot);
+                        if(!guardProtocol)snapshot.remove("openGuard");
+                        SharedPreferences.Editor edit=saved.edit();if(saved.getAll().size()>30)edit.clear();
+                        if(!edit.putString(id,ack.toString()).commit())throw new IllegalStateException("Wi-Fi result could not be saved");
+                    }
+                    if(!guardProtocol)ack.getJSONObject("snapshot").remove("openGuard");
+                    backend.post("/api/device/wifi/commands/"+id+"/ack",ack,true);
+                }
+            }catch(Exception error){Log.w("SCANPLUS","Wi-Fi report delivery failed: "+error.getClass().getSimpleName());}
+            finally{wifiBusy.set(false);}
+        });
     }
     private void executeApp(JSONObject command){
         if(!appBusy.compareAndSet(false,true))return;
@@ -100,6 +166,6 @@ public final class AgentService extends Service {
         backend.post("/api/device/commands/"+id+"/ack",ack,true);
     }
     @Override public int onStartCommand(Intent intent,int flags,int id){return START_STICKY;}
-    @Override public void onDestroy(){worker.shutdownNow();appWorker.shutdownNow();super.onDestroy();}
+    @Override public void onDestroy(){if(wifiMonitor!=null)wifiMonitor.close();if(simMonitor!=null)simMonitor.close();worker.shutdownNow();appWorker.shutdownNow();wifiWorker.shutdownNow();simWorker.shutdownNow();super.onDestroy();}
     @Override public android.os.IBinder onBind(Intent intent){return null;}
 }

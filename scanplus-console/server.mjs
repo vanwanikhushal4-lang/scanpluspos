@@ -3,18 +3,10 @@ import https from 'node:https';
 import { readFile, stat } from 'node:fs/promises';
 import { resolve, dirname, extname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { apkLimit, apkName, csp, HttpError, routeKind, validateCommand } from './gateway-policy.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const uuid = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
-const protectionRoute = new RegExp(`^/api/admin/devices/${uuid}/protection$`, 'i');
-const commandsRoute = new RegExp(`^/api/admin/devices/${uuid}/commands$`, 'i');
-const appInventoryRoute = new RegExp(`^/api/admin/devices/${uuid}/apps$`, 'i');
-const appCommandsRoute = new RegExp(`^/api/admin/devices/${uuid}/app-commands$`, 'i');
-const appActions = new Set(['REFRESH', 'LAUNCH', 'FORCE_STOP', 'SUSPEND', 'RESUME', 'HIDE', 'SHOW', 'BLOCK_UNINSTALL', 'ALLOW_UNINSTALL', 'GRANT_PERMISSION', 'DENY_PERMISSION', 'RESET_PERMISSION', 'INSTALL', 'UNINSTALL']);
-const apkLimit = 64 * 1024 * 1024;
 const contentTypes = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
-const csp = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'";
-class HttpError extends Error { constructor(status, message) { super(message); this.status = status; } }
 function json(res, status, body) { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(body)); }
 function body(req, limit = 16384) {
   return new Promise((resolveBody, reject) => {
@@ -83,13 +75,13 @@ export function createConsoleServer({ backendUrl, adminToken, ca, distDirectory 
         if (req.headers.origin && req.headers.origin !== `http://${host}`) throw new HttpError(403, 'Cross-origin management requests are blocked.');
         if (req.headers['sec-fetch-site'] && !['same-origin', 'none'].includes(req.headers['sec-fetch-site'])) throw new HttpError(403, 'Cross-origin management requests are blocked.');
         if (url.search) throw new HttpError(400, 'Unexpected query parameters.');
+        if (req.method === 'GET' && path === '/api/session') { json(res, 200, { authenticated: true, mode: 'Local administrator' }); return; }
         if (req.method === 'GET' && path === '/api/console/info') {
-          json(res, 200, { backend: new URL(backendUrl).origin, mode: 'Local administrator', pollSeconds: 3 }); return;
+          json(res, 200, { backend: new URL(backendUrl).origin, mode: 'Local administrator', pollSeconds: 10 }); return;
         }
-        const readAllowed = req.method === 'GET' && (['/api/admin/devices', '/api/admin/audit', '/api/health'].includes(path) || commandsRoute.test(path) || appInventoryRoute.test(path) || appCommandsRoute.test(path));
-        const upload = req.method === 'POST' && path === '/api/admin/apks';
-        const writeAllowed = req.method === 'POST' && (protectionRoute.test(path) || appCommandsRoute.test(path) || upload);
-        if (!readAllowed && !writeAllowed) throw new HttpError(404, 'This operation is not available in the console.');
+        const kind = routeKind(req.method, path);
+        const upload = kind === 'upload';
+        const writeAllowed = kind !== 'read';
         let payload, contentType, filename;
         if (writeAllowed) {
           if (req.headers.origin !== `http://${host}`) throw new HttpError(403, 'A same-origin management request is required.');
@@ -99,22 +91,14 @@ export function createConsoleServer({ backendUrl, adminToken, ca, distDirectory 
             payload = await body(req, apkLimit);
             if (!payload.length || payload[0] !== 0x50 || payload[1] !== 0x4b) throw new HttpError(400, 'Choose a valid APK archive.');
             contentType = 'application/vnd.android.package-archive';
-            filename = String(req.headers['x-apk-name'] || 'application.apk').replace(/[^A-Za-z0-9._ -]/g, '_').slice(-150);
+            filename = apkName(req.headers['x-apk-name']);
           } else {
           if (!req.headers['content-type']?.startsWith('application/json')) throw new HttpError(415, 'Use a JSON protection request.');
           if (Number(req.headers['content-length']) > 16384) throw new HttpError(413, 'Request is too large.');
           let input;
           try { input = JSON.parse((await body(req)).toString('utf8')); }
           catch (error) { if (error instanceof HttpError) throw error; throw new HttpError(400, 'Invalid JSON protection request.'); }
-          if (appCommandsRoute.test(path)) {
-            const permitted = ['requestId', 'action', 'packageName', 'permission', 'artifactId', 'ttlSeconds'];
-            if (!input || Array.isArray(input) || Object.keys(input).some(key => !permitted.includes(key)) || !appActions.has(input.action) || typeof input.requestId !== 'string' || !new RegExp(`^${uuid}$`, 'i').test(input.requestId) || !Number.isInteger(input.ttlSeconds) || input.ttlSeconds < 15 || input.ttlSeconds > 600) throw new HttpError(400, 'Invalid app control request.');
-            const withoutPackage = ['REFRESH', 'INSTALL'].includes(input.action);
-            if (withoutPackage ? input.packageName != null : typeof input.packageName !== 'string' || input.packageName.length > 180 || !/^(android|[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+)$/.test(input.packageName)) throw new HttpError(400, 'Invalid app package.');
-            if (input.action === 'INSTALL' ? typeof input.artifactId !== 'string' || !new RegExp(`^${uuid}$`, 'i').test(input.artifactId) : input.artifactId != null) throw new HttpError(400, 'Invalid APK selection.');
-            if (input.action.endsWith('_PERMISSION') ? typeof input.permission !== 'string' || !/^android\.permission\.[A-Z0-9_]+$/.test(input.permission) : input.permission != null) throw new HttpError(400, 'Invalid permission selection.');
-          } else if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).some(key => !['requestId', 'enabled', 'ttlSeconds'].includes(key)) || typeof input.enabled !== 'boolean' || typeof input.requestId !== 'string' || !new RegExp(`^${uuid}$`, 'i').test(input.requestId) || !Number.isInteger(input.ttlSeconds) || input.ttlSeconds < 15 || input.ttlSeconds > 300) throw new HttpError(400, 'Invalid protection request.');
-          payload = JSON.stringify(input);
+          payload = validateCommand(path, input);
           }
         }
         const reply = await upstream({ method: req.method, path, payload, contentType, filename });
@@ -151,7 +135,9 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     let settings;
     try { settings = JSON.parse(await readFile(adminFile, 'utf8')); }
     catch { throw new Error('Cannot read the private SCANPLUS administrator configuration. See README.md.'); }
-    const ca = await readFile(caFile);
+    if (settings.trustMode && !['public', 'dedicated'].includes(settings.trustMode)) throw new Error('Unknown backend trust mode.');
+    // Public mode uses Node's maintained public CA store; never disable verification.
+    const ca = settings.trustMode === 'public' ? undefined : await readFile(caFile);
     const port = Number(process.env.SCANPLUS_CONSOLE_PORT || 5173);
     if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('Choose a console port between 1024 and 65535.');
     const server = createConsoleServer({ backendUrl: settings.adminBaseUrl || settings.baseUrl, adminToken: settings.adminToken, ca });

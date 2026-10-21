@@ -1,6 +1,6 @@
 # SCANPLUS React console
 
-A React interface connected to the existing Spring MVC backend. Open
+A React interface for ScanPlus POS Security using the supplied dashboard design, connected to the existing Windows/Cloudflare backend. Open
 **http://127.0.0.1:5173/** on the administrator's Mac.
 
 The dashboard provides terminal search, last check-in and connection status,
@@ -14,6 +14,13 @@ icon or app screens; Android's management notification remains visible.
 A command remains pending until the terminal reports its result. Unknown status
 is not treated as confirmed maintenance. A request with an uncertain delivery
 result can be retried with the same idempotency key.
+
+The console opens directly to the Security Dashboard using the existing local
+administrator access. The supplied branding, top navigation, collapsible sidebar,
+light/dark themes, status cards and tables are adapted to live payment-terminal
+data. Device management, app control, APK deployments, protection, command
+history, audit reports and connection settings remain connected to the existing
+API. See [CMS integration](../docs/frontend-cms-integration.md) for the page mapping.
 
 ## Run
 
@@ -39,6 +46,16 @@ The Node server reads the existing private administrator configuration from
 `../.scanplus-local/server.pem`. It sends the API credential only from its server
 process to that configured HTTPS origin. It is never embedded in React or saved
 in browser storage. TLS verification remains enabled.
+
+For a public HTTPS backend, run `python3 scanplus-tools/configure_cloud_console.py`
+from the repository root. Enter the administrator token in its hidden local
+prompt. `trustMode: public` uses Node's maintained public CA store and does not
+need a local PEM file. The configuration omits the old `adminBaseUrl` override.
+The console still binds only to loopback; the public backend stays on Windows.
+
+Reads refresh every ten seconds while the page is visible. Hidden tabs pause,
+failed requests back off up to a minute and audit reads refresh every thirty
+seconds. Requests run sequentially so slow responses do not accumulate.
 
 For another dedicated backend, set server-side environment variables:
 
@@ -104,3 +121,10 @@ The downloadable console bundle includes `dist/`. With that prebuilt bundle you
 can run `node server.mjs` directly, without installing frontend dependencies.
 Place the folder next to `.scanplus-local/`, or supply the two private configuration
 paths above. Use `npm ci` and `npm run build` when changing React sources.
+## Hosted console
+
+The public [Netlify console](https://scanplus-pos-security.netlify.app) uses SCANPLUS
+administrator sign-in and a server-side Edge gateway. Setup,
+environment scope, deployment and verification are documented in
+[the Netlify deployment guide](../docs/netlify-console.md). The local console
+described above remains available independently.

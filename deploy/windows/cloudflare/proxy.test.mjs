@@ -11,6 +11,28 @@ const forbidden = { SCANPLUS_BACKEND: { fetch() { throw new Error('Must not reac
 test('anonymous management requests never reach the backend', async () => {
   assert.equal((await proxy.fetch(req('/api/admin/devices'), forbidden)).status, 401);
 });
+test('Wi-Fi and SIM reports and typed management routes preserve device identity and require authentication', async () => {
+  const paths = [
+    ['GET', `/api/admin/devices/${device}/wifi`],
+    ['POST', `/api/admin/devices/${device}/wifi/scan`],
+    ['POST', `/api/admin/devices/${device}/wifi/policy`],
+    ['POST', `/api/admin/devices/${device}/wifi/guard`],
+    ['POST', '/api/device/wifi/report'],
+    ['POST', `/api/device/wifi/commands/${device}/ack`],
+    ['GET', `/api/admin/devices/${device}/sim`],
+    ['POST', `/api/admin/devices/${device}/sim/alerts/${device}/ack`],
+    ['POST', '/api/device/sim/report'],
+  ];
+  for (const [method, path] of paths) {
+    assert.equal((await proxy.fetch(req(path, { method }), forbidden)).status, 401);
+    let forwarded;
+    const env = { SCANPLUS_BACKEND: { async fetch(request) { forwarded = request; return Response.json({ accepted: true }); } } };
+    assert.equal((await proxy.fetch(req(path, { method, headers: { Authorization: `Bearer ${token}`, 'X-Device-Id': device } }), env)).status, 200);
+    assert.equal(forwarded.url, `http://localhost:9443${path}`);
+    assert.equal(forwarded.headers.get('X-Device-Id'), device);
+  }
+  assert.equal((await proxy.fetch(req(`/api/admin/devices/${device}/wifi/connect`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } }), forbidden)).status, 404);
+});
 test('HTTP and arbitrary URLs cannot become a backend proxy', async () => {
   assert.equal((await proxy.fetch(new Request('http://example.workers.dev/api/health'), forbidden)).status, 426);
   for (const path of ['/http://169.254.169.254/', '/api/health?url=http://other/', '/api/admin/devices/%2e%2e/', '/api/shell']) {

@@ -1,0 +1,7 @@
+Public CA roots, exported from Node.js v24.19.0 tls.rootCertificates on 2026-10-17.
+120 certificates. SHA-256: 30b7a0242d363aa77faa2b2bb71f802c7890765e3350f8a566c4fccf4b7ad4f2
+Node distributes the Mozilla CA trust store, sourced under Mozilla Public License 2.0.
+Source: https://github.com/nodejs/node/blob/v24.19.0/src/node_root_certs.h
+License: https://www.mozilla.org/MPL/2.0/
+API: https://nodejs.org/api/tls.html#tlsrootcertificates
+Update this bundle and its cache key when rotating public roots. No server leaf certificates or private keys are included.

@@ -5,20 +5,23 @@ import javax.net.ssl.*;
 import java.io.*;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
-import java.security.KeyStore;
-import java.security.cert.CertificateFactory;
 
 final class BackendClient {
     private final AgentConfiguration config;
     private final SSLSocketFactory sockets;
+    private static String cachedTrust;
+    private static SSLSocketFactory cachedSockets;
+    private static synchronized SSLSocketFactory sockets(AgentConfiguration config)throws Exception {
+        String key=config.trustKey();
+        if(!key.equals(cachedTrust)){
+            try(InputStream pem=config.trustBundle()){cachedSockets=TlsTrust.socketFactory(pem);}
+            cachedTrust=key;
+        }
+        return cachedSockets;
+    }
     BackendClient(AgentConfiguration config)throws Exception {
         this.config=config;
-        KeyStore trust=KeyStore.getInstance(KeyStore.getDefaultType());trust.load(null);
-        try(InputStream pem=new ByteArrayInputStream(config.data.getString("caPem").getBytes(StandardCharsets.US_ASCII))){
-            trust.setCertificateEntry("scanplus-server",CertificateFactory.getInstance("X.509").generateCertificate(pem));
-        }
-        TrustManagerFactory managers=TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());managers.init(trust);
-        SSLContext tls=SSLContext.getInstance("TLSv1.2");tls.init(null,managers.getTrustManagers(),null);sockets=tls.getSocketFactory();
+        sockets=sockets(config);
     }
     JSONObject post(String path,JSONObject body,boolean authenticated)throws Exception {
         URL url=new URL(config.baseUrl()+path);

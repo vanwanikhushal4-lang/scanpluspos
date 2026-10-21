@@ -7,7 +7,7 @@ Java backend, React administrator console and Windows/Cloudflare deployment.
 
 | Directory | Purpose |
 | --- | --- |
-| `scanplus-agent/` | Headless Android 7.1-compatible management agent, version 3.1.2-scanplus |
+| `scanplus-agent/` | Headless Android 7.1-compatible management agent, version 3.2.0-scanplus |
 | `scanplus-backend/` | Java 17 / Spring MVC API, persistent H2 database, APK storage and audit history |
 | `scanplus-console/` | React console with a local Node server that keeps administrator credentials out of the browser |
 | `deploy/windows/` | Windows launch/startup scripts and the Cloudflare Workers VPC gateway |
@@ -54,7 +54,7 @@ npm run build
 npm start
 ```
 
-The console needs its private backend administrator/CA configuration before it
+The console needs its private backend administrator/trust configuration before it
 can start. It binds to loopback and is not a public multi-user dashboard.
 
 ## Deployment and current migration status
@@ -70,9 +70,10 @@ public routing identifiers are not credentials. Another deployment needs its own
 Cloudflare account, tunnel and service binding.
 
 The Windows endpoint has passed public health and invalid-credential checks.
-At this source snapshot, migration of the existing terminal enrollment remains
-planned. The CA-bundle and reduced-polling changes described in the plan are not
-implemented in this snapshot. Workers VPC is currently free during beta and
+Agent 3.2.0 adds bundled public CA roots with full TLS validation, and the console
+supports public HTTPS backends with slower, visibility-aware polling. See the
+[cloud-agent cutover guide](docs/cloud-agent-cutover.md) for secure provisioning,
+private console setup and acceptance checks. Workers VPC is currently free during beta and
 Workers Free request quotas apply; this is not an uptime guarantee.
 
 The privileged USB helper must be explicitly provisioned. Its terminal-reboot

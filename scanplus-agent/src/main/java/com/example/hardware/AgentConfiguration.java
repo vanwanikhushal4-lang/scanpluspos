@@ -11,7 +11,9 @@ import java.nio.charset.StandardCharsets;
 final class AgentConfiguration {
     final AtomicFile file;
     final JSONObject data;
+    private final Context context;
     AgentConfiguration(Context context)throws Exception {
+        this.context=context.getApplicationContext();
         file=new AtomicFile(new File(context.getFilesDir(),"scanplus-bootstrap.json"));
         byte[] bytes=file.readFully();
         if(bytes.length>16384)throw new SecurityException("Invalid provisioning file size.");
@@ -19,7 +21,15 @@ final class AgentConfiguration {
         URI uri=new URI(data.getString("baseUrl"));
         if(!"https".equals(uri.getScheme())||uri.getHost()==null||uri.getUserInfo()!=null||uri.getQuery()!=null||uri.getFragment()!=null||!(uri.getPath().isEmpty()||uri.getPath().equals("/")))
             throw new SecurityException("Backend must be an HTTPS origin.");
-        if(!data.has("caPem"))throw new SecurityException("Provisioning must include the dedicated backend certificate authority.");
+        String mode=trustMode();
+        if(!mode.equals("public")&&!mode.equals("dedicated"))throw new SecurityException("Unknown backend trust mode.");
+        if(mode.equals("dedicated")&&!data.has("caPem"))throw new SecurityException("Provisioning must include the dedicated backend certificate authority.");
+    }
+    String trustMode(){return data.optString("trustMode","dedicated");}
+    String trustKey()throws Exception{return trustMode().equals("public")?"public-2026-10-17":data.getString("caPem");}
+    InputStream trustBundle()throws Exception{
+        return trustMode().equals("public")?context.getAssets().open("public-roots.crt"):
+            new ByteArrayInputStream(data.getString("caPem").getBytes(StandardCharsets.US_ASCII));
     }
     String baseUrl()throws Exception {String url=data.getString("baseUrl");return url.endsWith("/")?url.substring(0,url.length()-1):url;}
     boolean enrolled(){return data.has("deviceId")&&data.has("deviceToken");}

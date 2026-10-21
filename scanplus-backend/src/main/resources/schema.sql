@@ -37,3 +37,23 @@ CREATE TABLE IF NOT EXISTS app_commands (
  UNIQUE(device_id,request_id)
 );
 CREATE INDEX IF NOT EXISTS app_commands_device_state ON app_commands(device_id,state,created_at);
+CREATE TABLE IF NOT EXISTS wifi_snapshots (
+ device_id VARCHAR(36) PRIMARY KEY REFERENCES devices(id), reported_at TIMESTAMP NOT NULL, snapshot_json CLOB NOT NULL
+);
+CREATE TABLE IF NOT EXISTS wifi_commands (
+ id VARCHAR(36) PRIMARY KEY, device_id VARCHAR(36) NOT NULL REFERENCES devices(id), request_id VARCHAR(36) NOT NULL,
+ action VARCHAR(24) NOT NULL, blocked BOOLEAN,
+ created_at TIMESTAMP NOT NULL, expires_at TIMESTAMP NOT NULL, completed_at TIMESTAMP,
+ state VARCHAR(16) NOT NULL, detail VARCHAR(500), UNIQUE(device_id,request_id)
+);
+CREATE INDEX IF NOT EXISTS wifi_commands_device_state ON wifi_commands(device_id,state,created_at);
+CREATE TABLE IF NOT EXISTS sim_snapshots (
+ device_id VARCHAR(36) PRIMARY KEY REFERENCES devices(id), reported_at TIMESTAMP NOT NULL, snapshot_json CLOB NOT NULL
+);
+CREATE TABLE IF NOT EXISTS sim_alerts (
+ device_id VARCHAR(36) NOT NULL REFERENCES devices(id), event_id VARCHAR(36) NOT NULL,
+ event_type VARCHAR(32) NOT NULL, slot_index INTEGER NOT NULL, observed_at TIMESTAMP NOT NULL, received_at TIMESTAMP NOT NULL,
+ previous_suffix VARCHAR(4), current_suffix VARCHAR(4), previous_carrier VARCHAR(64) NOT NULL, current_carrier VARCHAR(64) NOT NULL,
+ payload_hash VARCHAR(64) NOT NULL, acknowledged_at TIMESTAMP, PRIMARY KEY(device_id,event_id)
+);
+CREATE INDEX IF NOT EXISTS sim_alerts_device_ack ON sim_alerts(device_id,acknowledged_at,received_at);
