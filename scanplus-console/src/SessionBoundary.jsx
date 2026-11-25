@@ -15,7 +15,7 @@ export default function SessionBoundary({ children }) {
     const controller = new AbortController(); check(controller.signal);
     const expired = () => { setSession({ authenticated: false, mode: 'SCANPLUS administrator' }); setAccessKey(''); setError('Your session ended. Sign in again to continue.'); };
     window.addEventListener('scanplus-auth-required', expired);
-    try { document.documentElement.classList.toggle('dark', localStorage.getItem('scanplus-theme') === 'dark'); } catch {}
+    try { document.documentElement.classList.toggle('dark', localStorage.getItem('scanplus-theme') !== 'light'); } catch {}
     return () => { controller.abort(); window.removeEventListener('scanplus-auth-required', expired); };
   }, []);
   async function signIn(event) {

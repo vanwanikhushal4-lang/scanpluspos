@@ -1,4 +1,16 @@
-# SCANPLUS React console
+# SCANPLUS React console · Figma edition
+
+This copy adapts the [Figma dashboard](https://www.figma.com/design/g5Tru5PI83ZEtbwtmA75Jh/Dashboard?node-id=8565-18) for the existing ScanPlus console. Application Control is the first dashboard feature. The charts show reported fleet and terminal data, including the distribution of last check-in ages.
+
+Run this copy on its own port alongside the original. Point `SCANPLUS_ADMIN_FILE` at the existing private configuration and, for dedicated TLS, set `SCANPLUS_CA_FILE` to the existing PEM file.
+
+```sh
+npm ci
+npm run build
+SCANPLUS_CONSOLE_PORT=5181 SCANPLUS_ADMIN_FILE=/path/to/.scanplus-local/admin.json npm start
+```
+
+The rest of this README documents the console shared by both editions.
 
 A React interface for ScanPlus POS Security using the supplied dashboard design, connected to the existing Windows/Cloudflare backend. Open
 **http://127.0.0.1:5173/** on the administrator's Mac.

@@ -1,31 +1,40 @@
 import React, { useEffect, useState } from 'react';
 import { Check, CheckCheck, CircleHelp, LoaderCircle, LockKeyhole, Monitor, Server, ShieldCheck, TerminalSquare, X } from 'lucide-react';
 import AppControl from './AppControl.jsx';
-import ConsoleShell from './cms/ConsoleShell.jsx';
+import ConsoleShell, { navigation } from './cms/ConsoleShell.jsx';
 import SecurityDashboard from './cms/SecurityDashboard.jsx';
 import { CommandHistory, ConnectionSettings, DeviceManagement, ProtectionPanel } from './cms/DevicePages.jsx';
 import Reports from './cms/Reports.jsx';
+import CompliancePage from './cms/CompliancePage.jsx';
+import MonitoringPage from './cms/MonitoringPage.jsx';
 import WifiPage from './cms/WifiPage.jsx';
 import SimPage from './cms/SimPage.jsx';
 import { useConsole } from './cms/useConsole.js';
 import { Modal, PageHead } from './cms/ui.jsx';
 import { online } from './model.mjs';
 
-const routes = new Set(['dashboard', 'devices', 'apps', 'wifi', 'sim', 'protection', 'deployments', 'commands', 'reports', 'settings']);
+const routes = new Set([...navigation.map(item => item.id), 'compliance', 'monitoring', 'settings']);
 function route() { const value = window.location.hash.slice(1); return routes.has(value) ? value : 'dashboard'; }
 export default function App({ session }) {
   const [view, setView] = useState(route), [options, setOptions] = useState({});
   const m = useConsole(view);
+  const [showDemo, setShowDemo] = useState(true);
+  const demoDashboard = view === 'dashboard' && showDemo;
   const navigate = (page, next = {}) => { if (!routes.has(page)) return; setOptions(next); setView(page); window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${page}`); document.querySelector('.cms-content')?.scrollTo({ top: 0 }); };
   useEffect(() => { const changed = () => { setView(route()); setOptions({}); }; window.addEventListener('hashchange', changed); return () => window.removeEventListener('hashchange', changed); }, []);
-  return <><a href="#main-content" className="cms-skip-link" onClick={event => { event.preventDefault(); document.getElementById('main-content')?.focus(); }}>Skip to main content</a><ConsoleShell model={m} session={session} view={view} navigate={navigate}>
-    {view === 'dashboard' && <SecurityDashboard model={m} navigate={navigate}/>}
+  return <><a href="#main-content" className="cms-skip-link" onClick={event => { event.preventDefault(); document.getElementById('main-content')?.focus(); }}>Skip to main content</a><ConsoleShell model={m} session={session} view={view} navigate={navigate} demoDashboard={demoDashboard}>
+    {view === 'dashboard' && <SecurityDashboard model={m} navigate={navigate} demo={demoDashboard} toggleDemo={() => setShowDemo(value => !value)}/>}
     {view === 'devices' && <DeviceManagement key={options.filter || 'all'} model={m} navigate={navigate} initialFilter={options.filter}/>}
+    {view === 'connectivity' && <DeviceManagement key={`connectivity-${options.filter || 'all'}`} model={m} navigate={navigate} initialFilter={options.filter} title="Up / Down" description="Terminal connectivity and the latest check-in status."/>}
     {view === 'wifi' && <WifiPage key={m.selectedId || 'none'} model={m}/>}
     {view === 'sim' && <SimPage key={m.selectedId || 'none'} model={m}/>}
-    {['apps', 'deployments'].includes(view) && <><PageHead title={view === 'apps' ? 'Application Control' : 'App Deployment'} description={view === 'apps' ? 'Manage installed apps, visibility, runtime permissions and policies.' : 'Upload and install APKs, then track the terminal’s confirmed result.'}/><AppControl key={`${m.selectedId}-${view}-${options.appFilter || ''}`} devices={m.devices} selectedId={m.selectedId} onSelect={m.setSelectedId} onManageDevice={() => navigate('protection')} now={m.now} initialFilter={options.appFilter} focus={view === 'deployments' ? 'deployments' : 'all'}/></>}
+    {['apps', 'deployments'].includes(view) && <><PageHead title={view === 'apps' ? 'Application Control' : 'Remote Patch Management'} description={view === 'apps' ? 'Manage installed apps, visibility, runtime permissions and policies.' : 'Deploy application updates and track the terminal’s confirmed result. OS patch deployment is not available.'}/><AppControl key={`${m.selectedId}-${view}-${options.appFilter || ''}`} devices={m.devices} selectedId={m.selectedId} onSelect={m.setSelectedId} onManageDevice={() => navigate('protection')} now={m.now} initialFilter={options.appFilter} focus={view === 'deployments' ? 'deployments' : 'all'}/></>}
     {view === 'protection' && <ProtectionPanel model={m} navigate={navigate}/>}
+    {view === 'storage' && <ProtectionPanel model={m} navigate={navigate} title="Storage Control" description="File transfer restrictions are managed as part of full terminal protection."/>}
+    {view === 'hardening' && <ProtectionPanel model={m} navigate={navigate} title="Device and OS Hardening" description="Settings, factory reset and debugging restrictions are managed as part of full terminal protection."/>}
     {view === 'commands' && <CommandHistory model={m}/>}
+    {view === 'compliance' && <CompliancePage model={m}/>}
+    {view === 'monitoring' && <MonitoringPage navigate={navigate}/>}
     {view === 'reports' && <Reports model={m}/>}
     {view === 'settings' && <ConnectionSettings model={m}/>}
   </ConsoleShell>
